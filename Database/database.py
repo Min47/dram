@@ -22,7 +22,6 @@ class DatabaseManager:
         )
 
     def init_db(self, force_reset: bool = False):
-        """Create tables if they don't exist, or reset everything if force_reset=True"""
         print("------------")
         print("| Database |")
         print("------------")
@@ -33,8 +32,8 @@ class DatabaseManager:
         Base.metadata.create_all(self.engine)
         print("> Tables: Created.")
 
-        # Ensure dimension tables are populated
-        self.ensure_dimensions(date_dim=True, region_dim=force_reset)
+        # Pass force_reset flag
+        self.ensure_dimensions(date_dim=True, region_dim=True, force_reset=force_reset)
 
     def get_session(self) -> Session:
         """Get a new DB session"""
@@ -88,10 +87,10 @@ class DatabaseManager:
             else:
                 print("> [DataDim] No new dates inserted.")
 
-    def ensure_region_dim(self):
+    def ensure_region_dim(self, force_reset: bool = False):
         """
         Populate region_dim with detailed country metadata from GitHub.
-        Self-healing: inserts missing countries, skips existing.
+        Inserts only if table is empty or force_reset=True.
         """
         countries_url = "https://raw.githubusercontent.com/annexare/Countries/main/dist/countries.csv"
         countries_df = pd.read_csv(countries_url)
@@ -106,13 +105,20 @@ class DatabaseManager:
             "OC": "Oceania",
             "SA": "South America",
         }
-        # Reverse map: name -> code
         continent_name_to_code = {v: k for k, v in continent_map.items()}
 
         with self.get_session() as session:
-            existing = {r.country_code for r in session.query(RegionDim.country_code).all()}
-            inserted, skipped, failed = 0, 0, 0
+            # ✅ If not force_reset and already has rows, skip insert
+            if not force_reset and session.query(RegionDim).first():
+                print("> [RegionDim] Already populated. Skipping insert.")
+                return
 
+            # Proceed to fresh insert
+            existing = set()
+            if not force_reset:
+                existing = {r.country_code for r in session.query(RegionDim.country_code).all()}
+
+            inserted, skipped = 0, 0
             for idx, row in countries_df.iterrows():
                 code = str(row["Code"]).strip()
                 if code in existing:
@@ -123,44 +129,35 @@ class DatabaseManager:
                 continent_code = continent_name_to_code.get(continent_name_raw, None)
                 continent_name = continent_name_raw if continent_name_raw else "Unknown"
 
-                # Clean values (replace NaN/None with None, not "nan")
                 def clean(val):
                     return None if pd.isna(val) or str(val).strip().lower() == "nan" else str(val).strip()
 
-                try:
-                    session.add(
-                        RegionDim(
-                            country_code=code,
-                            country_name=clean(row.get("Name")),
-                            native_name=clean(row.get("Native")),
-                            phone_code=clean(row.get("Phone")),
-                            continent_code=continent_code,
-                            continent_name=continent_name,
-                            capital=clean(row.get("Capital")),
-                            currency=clean(row.get("Currency")),
-                            languages=",".join(
-                                clean(row.get("Languages")).replace(";", ",").split(",")
-                            ) if clean(row.get("Languages")) else None
-                        )
+                session.add(
+                    RegionDim(
+                        country_code=code,
+                        country_name=clean(row.get("Name")),
+                        native_name=clean(row.get("Native")),
+                        phone_code=clean(row.get("Phone")),
+                        continent_code=continent_code,
+                        continent_name=continent_name,
+                        capital=clean(row.get("Capital")),
+                        currency=clean(row.get("Currency")),
+                        languages=",".join(
+                            clean(row.get("Languages")).replace(";", ",").split(",")
+                        ) if clean(row.get("Languages")) else None
                     )
-                    session.flush()
-                    inserted += 1
-
-                except Exception as e:
-                    failed += 1
-                    print("[RegionDim] Insert failed at row", idx, ":", row.to_dict())
-                    print("Error:", e)
-                    session.rollback()
+                )
+                inserted += 1
 
             session.commit()
-            print(f"> [RegionDim] Inserted: {inserted}, skipped: {skipped}, failed: {failed}.")
+            print(f"> [RegionDim] Inserted: {inserted} | Skipped: {skipped}.")
 
-    def ensure_dimensions(self, date_dim: bool = True, region_dim: bool = False):
+    def ensure_dimensions(self, date_dim: bool = True, region_dim: bool = False, force_reset: bool = False):
         """Convenience method: load both date_dim & region_dim"""
         if date_dim:
             self.ensure_date_dim()
         if region_dim:
-            self.ensure_region_dim()
+            self.ensure_region_dim(force_reset=force_reset)
 
     # ----------------------------
     # CRUD Methods

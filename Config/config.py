@@ -13,9 +13,6 @@ class PostgresConfig:
 
     @classmethod
     def connection_url(cls):
-        print("Using Postgres connection URL from environment variables.")
-        print(f"Host: {cls.db_host}, User: {cls.db_user}, DB: {cls.db_name}")
-        print("\n\n\n\n\n")
         return f"postgresql://{cls.db_user}:{cls.db_password}@{cls.db_host}/{cls.db_name}?sslmode=require&channel_binding=require"
     
 class Config:

@@ -24,14 +24,22 @@ CREATE TABLE date_dim (
     quarter INT,
     month INT,
     week INT,
-    day_of_week VARCHAR(10)
+    day_of_week_num INT,
+    day_of_week_name VARCHAR(10)
 );
 
 -- Region Dimension
 CREATE TABLE region_dim (
     region_id SERIAL PRIMARY KEY,
-    region_name VARCHAR(100),   -- APAC, NA, EMEA
-    country VARCHAR(100)
+    country_code VARCHAR(5) NOT NULL,        -- "AD"
+    country_name VARCHAR(100) NOT NULL,      -- "Andorra"
+    native_name VARCHAR(100),                -- "Andorra"
+    phone_code VARCHAR(20),                  -- "376"
+    continent_code VARCHAR(5),               -- "EU"
+    continent_name VARCHAR(50),              -- "Europe"
+    capital VARCHAR(100),                    -- "Andorra la Vella"
+    currency VARCHAR(50),                    -- "EUR"
+    languages TEXT                           -- "ca"
 );
 
 -- ================================
@@ -118,3 +126,14 @@ CREATE INDEX idx_smartphone_shipments_brand ON smartphone_shipments(brand);
 CREATE INDEX idx_pc_shipments_brand ON pc_shipments(brand);
 CREATE INDEX idx_macro_indicators_indicator ON macro_indicators(indicator);
 CREATE INDEX idx_competitor_pricing_competitor ON competitor_pricing(competitor);
+
+-- ================================
+-- UPDATES
+-- ================================
+
+-- Add unique constraint (if not already exists)
+ALTER TABLE date_dim 
+    ADD CONSTRAINT uq_date_dim_date UNIQUE (date);
+
+ALTER TABLE region_dim 
+    ADD CONSTRAINT uq_region_country_code UNIQUE (country_code);

@@ -1,5 +1,5 @@
 # Database/database.py
-from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, UniqueConstraint, Text
 from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
@@ -12,11 +12,12 @@ class DateDim(Base):
     __tablename__ = "date_dim"
 
     date = Column(Date, primary_key=True)
-    year = Column(Integer)
-    quarter = Column(Integer)
-    month = Column(Integer)
-    week = Column(Integer)
-    day_of_week = Column(String(10))
+    year = Column(Integer, nullable=False)
+    quarter = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    week = Column(Integer, nullable=False)
+    day_of_week_num = Column(Integer, nullable=False)  # 1=Mon, 7=Sun
+    day_of_week_name = Column(String(10), nullable=False)
 
     # Relationships
     dram_prices = relationship("DramPrices", back_populates="date_dim")
@@ -27,23 +28,37 @@ class DateDim(Base):
     macro_indicators = relationship("MacroIndicators", back_populates="date_dim")
     competitor_pricing = relationship("CompetitorPricing", back_populates="date_dim")
 
+    __table_args__ = (
+        UniqueConstraint("date", name="uq_date_dim_date"),
+    )
+
     def __repr__(self):
         return f"<DateDim(date={self.date}, year={self.year}, month={self.month})>"
-
 
 class RegionDim(Base):
     __tablename__ = "region_dim"
 
     region_id = Column(Integer, primary_key=True, autoincrement=True)
-    region_name = Column(String(100))   # APAC, NA, EMEA
-    country = Column(String(100))
+    country_code = Column(String(5), nullable=False)
+    country_name = Column(String(100), nullable=False)
+    native_name = Column(String(100))
+    phone_code = Column(String(20))
+    continent_code = Column(String(5))
+    continent_name = Column(String(50))
+    capital = Column(String(100))
+    currency = Column(String(50))
+    languages = Column(Text)  # store as CSV
 
     # Relationships
     smartphone_shipments = relationship("SmartphoneShipments", back_populates="region_dim")
     macro_indicators = relationship("MacroIndicators", back_populates="region_dim")
 
+    __table_args__ = (
+        UniqueConstraint("country_code", name="uq_region_country_code"),
+    )
+    
     def __repr__(self):
-        return f"<RegionDim(region_id={self.region_id}, region_name='{self.region_name}', country='{self.country}')>"
+        return f"<RegionDim(code={self.country_code}, name={self.country_name}, continent={self.continent_name})>"
 
 
 # ================================
